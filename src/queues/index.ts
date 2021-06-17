@@ -1,36 +1,59 @@
 import Queue, { Job } from "bull";
 import dotenv from "dotenv";
-import { __baseDir } from "../helpers";
-import { addBeneficiary } from "../process";
+import { TEZOS_API_SERVER } from "../constants";
+import { client } from "../helper";
 import { logger } from "../logger";
 
+const __baseDir = process.env.PWD;
 dotenv.config({ path: `${__baseDir}/.env.${process.env.NODE_ENV}` });
 
-export const addBeneficiaryQueue = new Queue("addBeneficiaryQueue", {
+export const addTransferRequest = new Queue("addTransferRequest", {
    redis: {
       host: process.env.REDIS_HOSTNAME,
       port: 6379,
    },
 });
 
-addBeneficiaryQueue.process(async (job: Job, done) => {
-   logger.info(`JOB: job started with ${job.id}`);
+addTransferRequest.process(async (job: Job, done) => {
+   logger.info(`TRANSFER_REQUEST_JOB: job started with ${job.id}`);
    try {
-      await addBeneficiary(
-         job.data.derivedBeneficiary,
-         job.data.vestAddress,
-         job.data.claimTokens
-      );
+      var returnValues: any = [];
+      client.get("TOKEN", async (error, Token) => {
+         if (error) throw new Error(`Auth Token not found please set.`);
+         const args = job.data;
+         const response = await fetch(
+            `${TEZOS_API_SERVER}/v1/oropocket/transactions/transfer`,
+            {
+               method: "post",
+               headers: {
+                  "Content-Type": "application/json",
+                  Token: String(Token),
+               },
+               body: JSON.stringify({
+                  sender: args.sender,
+                  receiver: args.receiver,
+                  amount: args.amount,
+                  tokenId: args.tokenId,
+               }),
+            }
+         );
+
+         returnValues.push(response);
+      });
+
+      return returnValues;
    } catch (error) {
-      logger.error(`TX_ERORR: Holder ${job.data.derivedBeneficiary}`);
+      logger.error(`TRANSFER_REQUEST_ERROR: process failed ${job.data}`);
       throw new Error("some unexpected error");
    }
 });
 
-addBeneficiaryQueue.on("error", (error: Error) => {
-   logger.error(`QUEUE_SERVER_ERROR: ${error.message}`);
+addTransferRequest.on("error", (error: Error) => {
+   logger.error(`TRANSFER_REQUEST_QUEUE_SERVER_ERROR: ${error.message}`);
 });
 
-addBeneficiaryQueue.on("completed", (job: Job) => {
-   logger.info(`JOB_COMPLETED: Wow Job Successfully commited ${job.id}`);
+addTransferRequest.on("completed", (job: Job) => {
+   logger.info(
+      `TRANSFER_REQUEST_JOB_COMPLETED: Wow Job Successfully commited ${job.id}`
+   );
 });

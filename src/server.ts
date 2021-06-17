@@ -2,19 +2,14 @@ import express, { Application, Request, Response } from "express";
 import { json, urlencoded } from "body-parser";
 import dotenv from "dotenv";
 import morgan from "morgan";
-import {
-   benficiaryDetails,
-   getBenficiaryFromSmartContract,
-   __baseDir,
-   getJobId,
-} from "./helpers";
-import { addBeneficiaryQueue } from "./queues";
+import { addTransferRequest } from "./queues";
 import { logger } from "./logger";
 import _ from "lodash";
-import Fuse from "fuse.js";
 import cors from "cors";
-import { Job } from "bull";
+import { tokenRequestQueue } from "./queues/tokenQueue";
+import { configToken } from "./helper";
 
+const __baseDir = process.env.PWD;
 dotenv.config({ path: `${__baseDir}/.env.${process.env.NODE_ENV}` });
 
 const PORT = Number(process.env.PORT);
@@ -32,55 +27,26 @@ app.use(morgan("combined"));
 
 app.use(cors());
 
-app.post("/beneficiary-request", async (req, res) => {
+app.post("/transfer-request", async (req: Request, res: Response) => {
    try {
-      // grab the msgSender from the post body
-      const msgSender = req.body.msgSender;
+      const args = req.body;
+      const job = await addTransferRequest.add(args, {
+         max: 1000,
+         delay: 180000, // in 3 minutes
+         attempts: 2,
+         backoff: 5,
+         priority: args.priority,
+      });
 
-      // get beneficiary details
-      const beneficiary = await benficiaryDetails(msgSender);
-
-      // reject it self if he/she not the beneficiary.
-      if (_.isEmpty(beneficiary)) {
-         return res.status(400).json({
-            code: 400,
-            message: "Forbidden Permission Denied!",
-         });
-      }
-
-      const registeredBeneficiary = await getBenficiaryFromSmartContract(
-         msgSender
+      logger.info(
+         `JOB:: Job Added Successfully with ${job.id} and Priority ${args.priority}`
       );
-
-      const diff = _.xorBy(beneficiary, registeredBeneficiary, "vestAddress");
-
-      if (_.isEmpty(diff)) {
-         return res.json({
-            code: 200,
-            message: "there is no more vesting for this address.",
-         });
-      }
-
-      const alwaysLast = _.subtract(diff.length, 1);
-
-      const derivedBeneficiary = beneficiary[alwaysLast]?.beneficiaryAddress;
-      const vestAddress = beneficiary[alwaysLast]?.vestAddress;
-      const claimTokens = beneficiary[alwaysLast]?.claimTokens;
-
-      const job = await addBeneficiaryQueue.add(
-         { derivedBeneficiary, vestAddress, claimTokens },
-         {
-            delay: 500, // in 3 minutes
-            attempts: 2,
-            backoff: 5,
-         }
-      );
-      logger.info(`JOB:: Job Added Successfully with ${job.id}`);
 
       return res.status(200).json({
          code: 200,
          jobId: job.id,
-         message: "Job Added!",
+         priority: args.priority,
+         message: `Transfer Request added by the Priority of ${args.priority}`,
       });
    } catch (err) {
       logger.error(`ROUTE:: ${err.message}`);
@@ -91,19 +57,33 @@ app.post("/beneficiary-request", async (req, res) => {
    }
 });
 
-app.get("/jobStatus", async (req: Request, res: Response) => {
-   const jobId = Number(req.query["jobId"]);
-   const jobDetails = await addBeneficiaryQueue.getJob(jobId);
+app.get("/jobstatus", async (req: Request, res: Response) => {
+   const jobId = req.query.jobId;
+   const jobDetails = await addTransferRequest.getJob(Number(jobId));
    res.status(200).json({
       code: 200,
       data: {
          timeStamp: jobDetails?.timestamp,
          finishTime: jobDetails?.finishedOn,
          processTime: jobDetails?.processedOn,
+         jobData: jobDetails?.data,
+         returnValues: jobDetails?.returnvalue,
       },
    });
 });
 
+app.post("/setToken", async (req: Request, res: Response) => {
+   try {
+      await configToken();
+      return res.json({
+         code: 200,
+         data: "Token configuration done",
+      });
+   } catch (error) {
+      logger.error(`FAILED: please try again`);
+      throw new Error("some unexpected error");
+   }
+});
 // if no route found
 app.use(function (req, res, next) {
    logger.error(`BAD_REQUEST: one bad request found from ${req.ip}`);
@@ -114,5 +94,16 @@ app.use(function (req, res, next) {
 });
 
 app.listen(PORT, HOSTNAME, async () => {
+   try {
+      await tokenRequestQueue.add(
+         {},
+         { repeat: { cron: "0 * * ? * *" }, attempts: 2, backoff: 5 }
+      );
+      logger.info(`Repeatable Job Added`);
+   } catch (err) {
+      logger.error(
+         `Token is not updated please try to set manually. reason ${err.message}.`
+      );
+   }
    logger.info(`Queue server running at ${PORT}`);
 });
