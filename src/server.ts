@@ -97,7 +97,7 @@ app.listen(PORT, HOSTNAME, async () => {
    try {
       await tokenRequestQueue.add(
          {},
-         { repeat: { cron: "0 * * ? * *" }, attempts: 2, backoff: 5 }
+         { repeat: { cron: "0 0 12 * * ?" }, attempts: 2, backoff: 5 }
       );
       logger.info(`Repeatable Job Added`);
    } catch (err) {
