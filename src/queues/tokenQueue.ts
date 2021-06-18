@@ -5,6 +5,7 @@ import { configToken } from "../helper";
 export const tokenRequestQueue = new Queue("tokenRequestQueue", {
    redis: {
       host: process.env.REDIS_HOSTNAME,
+      password: process.env.REDIS_PASSWORD,
       port: 6379,
    },
 });

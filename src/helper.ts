@@ -4,6 +4,7 @@ import redis from "redis";
 
 export const client = redis.createClient({
    host: process.env.REDIS_HOSTNAME,
+   password: process.env.REDIS_PASSWORD,
    port: 6379,
 });
 

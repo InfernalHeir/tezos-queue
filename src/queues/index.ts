@@ -10,6 +10,7 @@ dotenv.config({ path: `${__baseDir}/.env.${process.env.NODE_ENV}` });
 export const addTransferRequest = new Queue("addTransferRequest", {
    redis: {
       host: process.env.REDIS_HOSTNAME,
+      password: process.env.REDIS_PASSWORD,
       port: 6379,
    },
 });
