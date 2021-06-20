@@ -8,6 +8,8 @@ import _ from "lodash";
 import cors from "cors";
 import { tokenRequestQueue } from "./queues/tokenQueue";
 import { configToken } from "./helper";
+import { transferRouteValidation } from "./validation";
+import { validationResult } from "express-validator";
 
 const __baseDir = process.env.PWD;
 dotenv.config({ path: `${__baseDir}/.env.${process.env.NODE_ENV}` });
@@ -21,41 +23,53 @@ const app: Application = express();
 app.use(json({ limit: "50kb", strict: true }));
 // set the url encoded
 app.use(urlencoded({ extended: true }));
-
 // set the morgon logger
 app.use(morgan("combined"));
 
 app.use(cors());
 
-app.post("/transfer-request", async (req: Request, res: Response) => {
-   try {
-      const args = req.body;
-      const job = await addTransferRequest.add(args, {
-         max: 1000,
-         delay: 180000, // in 3 minutes
-         attempts: 2,
-         backoff: 5,
-         priority: args.priority,
-      });
+app.post(
+   "/transfer-request",
+   transferRouteValidation,
+   async (req: Request, res: Response) => {
+      try {
+         const errors = validationResult(req);
 
-      logger.info(
-         `JOB:: Job Added Successfully with ${job.id} and Priority ${args.priority}`
-      );
+         if (!errors.isEmpty()) {
+            return res.json({
+               code: 200,
+               message: errors,
+            });
+         }
+         const args = req.body;
 
-      return res.status(200).json({
-         code: 200,
-         jobId: job.id,
-         priority: args.priority,
-         message: `Transfer Request added by the Priority of ${args.priority}`,
-      });
-   } catch (err) {
-      logger.error(`ROUTE:: ${err.message}`);
-      return res.status(500).json({
-         code: 500,
-         message: err.message,
-      });
+         const job = await addTransferRequest.add(args, {
+            max: 1000,
+            delay: 120000, // in 2 minutes
+            attempts: 1,
+            backoff: 5,
+            priority: args.priority,
+         });
+
+         logger.info(
+            `JOB:: Job Added Successfully with ${job.id} and Priority ${args.priority}`
+         );
+
+         return res.status(200).json({
+            code: 200,
+            jobId: job.id,
+            priority: args.priority,
+            message: `Transfer Request added by the Priority of ${args.priority}`,
+         });
+      } catch (err) {
+         logger.error(`ROUTE:: ${err.message}`);
+         return res.status(500).json({
+            code: 500,
+            message: err.message,
+         });
+      }
    }
-});
+);
 
 app.get("/jobstatus", async (req: Request, res: Response) => {
    const jobId = req.query.jobId;
