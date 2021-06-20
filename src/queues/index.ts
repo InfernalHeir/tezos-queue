@@ -41,6 +41,9 @@ addTransferRequest.process(async (job: Job, done) => {
          );
 
          returnValues.push(response);
+         logger.info(
+            `TRANSFER_REQUEST_JOB: job successfully done with ${job.id}`
+         );
       });
 
       return returnValues;
