@@ -32,8 +32,8 @@ app.post("/transfer-request", async (req: Request, res: Response) => {
       const args = req.body;
       const job = await addTransferRequest.add(args, {
          max: 1000,
-         delay: 180000, // in 3 minutes
-         attempts: 2,
+         delay: 60000, // in 1 minutes
+         attempts: 1,
          backoff: 5,
          priority: args.priority,
       });

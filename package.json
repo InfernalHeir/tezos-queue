@@ -4,7 +4,7 @@
    "main": "./dist/src/server.js",
    "license": "MIT",
    "scripts": {
-      "dev": "export NODE_ENV=dev && nodemon --ext '.ts' ./src/server.ts",
+      "dev": "export NODE_ENV=prod && nodemon --ext '.ts' ./src/server.ts",
       "clean": "rimraf ./dist",
       "killport": "kill-port --port 8080",
       "build": "babel ./ --extensions '.ts' --out-dir ./dist --config-file ./.babelrc --no-copy-ignored --copy-files && rm -rf ./dist/node_modules ./dist/package.json ./dist/tsconfig.json",

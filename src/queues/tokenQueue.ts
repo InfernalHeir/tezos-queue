@@ -1,6 +1,10 @@
 import Queue, { Job } from "bull";
 import { logger } from "../logger";
 import { configToken } from "../helper";
+import dotenv from "dotenv";
+
+const __baseDir = process.env.PWD;
+dotenv.config({ path: `${__baseDir}/.env.${process.env.NODE_ENV}` });
 
 export const tokenRequestQueue = new Queue("tokenRequestQueue", {
    redis: {
